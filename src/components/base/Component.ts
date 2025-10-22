@@ -2,8 +2,7 @@
  * Базовый компонент
  */
 export abstract class Component<T> {
-    protected constructor(protected readonly container: HTMLElement) {
-        // Учитывайте что код в конструкторе исполняется ДО всех объявлений в дочернем классе
+    constructor(public readonly container: HTMLElement) {
     }
 
     // Инструментарий для работы с DOM в дочерних компонентах

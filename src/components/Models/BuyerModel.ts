@@ -1,10 +1,17 @@
 import { IBuyer, ValidationResult } from '../../types';
+import { EventEmitter } from '../base/Events';
 
 export class BuyerModel {
     private _data: Partial<IBuyer> = {};
+    private events: EventEmitter;
+
+    constructor(events: EventEmitter) {
+        this.events = events;
+    }
 
     setData(data: Partial<IBuyer>): void {
         this._data = { ...this._data, ...data };
+        this.events.emit('buyer:changed');
     }
 
     getData(): Partial<IBuyer> {
@@ -13,6 +20,7 @@ export class BuyerModel {
 
     clear(): void {
         this._data = {};
+        this.events.emit('buyer:changed');
     }
 
     validate(): ValidationResult {
@@ -32,6 +40,35 @@ export class BuyerModel {
 
         if (!this._data.address || this._data.address.trim() === '') {
             errors.address = 'Укажите адрес доставки';
+        }
+
+        return errors;
+    }
+
+    // методы для раздельной валидации
+    validateOrder(): ValidationResult {
+        const errors: ValidationResult = {};
+
+        if (!this._data.payment) {
+            errors.payment = 'Не выбран способ оплаты';
+        }
+
+        if (!this._data.address || this._data.address.trim() === '') {
+            errors.address = 'Укажите адрес доставки';
+        }
+
+        return errors;
+    }
+
+    validateContacts(): ValidationResult {
+        const errors: ValidationResult = {};
+
+        if (!this._data.email || this._data.email.trim() === '') {
+            errors.email = 'Укажите email';
+        }
+
+        if (!this._data.phone || this._data.phone.trim() === '') {
+            errors.phone = 'Укажите телефон';
         }
 
         return errors;
