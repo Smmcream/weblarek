@@ -2,7 +2,7 @@ import './scss/styles.scss';
 import { ProductModel } from './components/Models/ProductModel';
 import { CartModel } from './components/Models/CartModel';
 import { BuyerModel } from './components/Models/BuyerModel';
-import { ShopAPI } from './types';  
+import { ShopAPI, IOrder, TPayment } from './types';  
 import { Api } from './components/base/Api'; 
 import { EventEmitter } from './components/base/Events';
 import { API_URL, CDN_URL } from './utils/constants';
@@ -21,7 +21,7 @@ import { Success } from './components/View/ui/Success';
 
 import { ensureElement, cloneTemplate } from './utils/utils';
 
-// Инициализация компонентов:
+// ========== ИНИЦИАЛИЗАЦИЯ КОМПОНЕНТОВ ==========
 
 // Создаем EventEmitter
 const events = new EventEmitter();
@@ -39,7 +39,7 @@ const shopAPI = new ShopAPI(api);
 const galleryContainer = ensureElement<HTMLElement>('.gallery');
 const modalContainer = ensureElement<HTMLElement>('#modal-container');
 
-// Создаем вью-компоненты
+// Создаем View компоненты
 const header = new Header(ensureElement<HTMLElement>('.header'), {
     onBasketClick: () => {
         events.emit('basket:open');
@@ -75,12 +75,7 @@ function validateOrderForm() {
     const isValid = Object.keys(errors).length === 0;
     
     orderForm.setValid(isValid);
-    
-    if (errors.address) {
-        orderForm.setAddressError(errors.address);
-    } else {
-        orderForm.setAddressError('');
-    }
+    orderForm.setAddressError(errors.address || '');
 }
 
 function validateContactsForm() {
@@ -88,8 +83,6 @@ function validateContactsForm() {
     const isValid = Object.keys(errors).length === 0;
     
     contactsForm.setValid(isValid);
-    
-    // Показываем ошибки если они вдруг есть
     const errorMessages = Object.values(errors).filter(msg => msg).join(', ');
     contactsForm.errors = errorMessages;
 }
@@ -101,8 +94,10 @@ const orderForm = new OrderForm(cloneTemplate(orderTemplate) as HTMLFormElement,
         events.emit('order:submit');
     },
     onPaymentChange: (payment) => {
-        buyerModel.setData({ payment });
-        validateOrderForm();
+        events.emit('order:payment:change', { payment });
+    },
+    onAddressChange: (address) => {
+        events.emit('order:address:change', { address });
     }
 });
 
@@ -110,6 +105,12 @@ const contactsForm = new ContactsForm(cloneTemplate(contactsTemplate) as HTMLFor
     onSubmit: (event: SubmitEvent) => {
         event.preventDefault();
         events.emit('contacts:submit');
+    },
+    onEmailChange: (email) => {
+        events.emit('contacts:email:change', { email });
+    },
+    onPhoneChange: (phone) => {
+        events.emit('contacts:phone:change', { phone });
     }
 });
 
@@ -119,26 +120,28 @@ const successView = new Success(cloneTemplate(successTemplate), {
     }
 });
 
-// Добавляем обработчики изменения полей
-orderForm.container.addEventListener('input', (event) => {
-    if (event.target instanceof HTMLInputElement && event.target.name === 'address') {
-        buyerModel.setData({ address: event.target.value });
-        validateOrderForm();
-    }
+// обработчик событий:
+
+// Обработчики для событий форм
+events.on('order:payment:change', (event: { payment: TPayment }) => {
+    buyerModel.setData({ payment: event.payment });
+    validateOrderForm();
 });
 
-contactsForm.container.addEventListener('input', (event) => {
-    if (event.target instanceof HTMLInputElement) {
-        if (event.target.name === 'email') {
-            buyerModel.setData({ email: event.target.value });
-        } else if (event.target.name === 'phone') {
-            buyerModel.setData({ phone: event.target.value });
-        }
-        validateContactsForm();
-    }
+events.on('order:address:change', (event: { address: string }) => {
+    buyerModel.setData({ address: event.address });
+    validateOrderForm();
 });
 
-// Обработчик событий:
+events.on('contacts:email:change', (event: { email: string }) => {
+    buyerModel.setData({ email: event.email });
+    validateContactsForm();
+});
+
+events.on('contacts:phone:change', (event: { phone: string }) => {
+    buyerModel.setData({ phone: event.phone });
+    validateContactsForm();
+});
 
 // Обработчик изменения каталога товаров
 events.on('products:changed', () => {
@@ -150,10 +153,7 @@ events.on('products:changed', () => {
             }
         });
         
-        // Рендерим карточку с базовыми данными
         const element = card.render(product);
-        
-        // Устанавливаем изображение отдельно через сеттер
         card.image = CDN_URL + product.image;
         
         return element;
@@ -167,7 +167,7 @@ events.on('card:select', (event: { product: any }) => {
     productModel.setSelectedProduct(event.product);
 });
 
-// Обработчик выбора товара в модели
+// Обрабочтки выбора товара в модели
 events.on('product:selected', (event: { product: any }) => {
     const preview = new ProductPreview(previewTemplate, {
         onAdd: () => {
@@ -178,10 +178,7 @@ events.on('product:selected', (event: { product: any }) => {
         }
     });
     
-    // Рендерим превью с базовыми данными
     const element = preview.render(event.product);
-    
-    // Устанавливаем изображение и статус корзины отдельно
     preview.image = CDN_URL + event.product.image;
     preview.description = event.product.description;
     preview.inCart = cartModel.contains(event.product.id);
@@ -190,7 +187,7 @@ events.on('product:selected', (event: { product: any }) => {
     modal.open();
 });
 
-// Обработчики добавления/удаления товаров
+// Обработчики добавления или удаления товаров
 events.on('preview:add', (event: { product: any }) => {
     cartModel.addItem(event.product);
     events.emit('modal:close');
@@ -201,7 +198,7 @@ events.on('preview:remove', (event: { productId: string }) => {
     events.emit('modal:close');
 });
 
-// Обработчик изменения корзины
+// Обработчик изменения в корзине
 events.on('cart:changed', () => {
     header.render({ counter: cartModel.getCount() });
 });
@@ -215,9 +212,7 @@ events.on('basket:open', () => {
             }
         });
         
-        // Сначала рендерим основные данные продукта
         const element = cartItem.render(item);
-        // Затем устанавливаем индекс через сеттер
         cartItem.index = index + 1;
         
         return element;
@@ -235,35 +230,33 @@ events.on('basket:open', () => {
 // Удаляем из корзины
 events.on('cart:remove', (event: { productId: string }) => {
     cartModel.removeItem(event.productId);
+// исправила - Проверяем, открыта ли корзина и перерисовываем её
+    if (modalContainer.classList.contains('modal_active')) {
+        events.emit('basket:open');
+    }
 });
 
-// Обрабаотчик оформления заказа
+// Обработчик оформления заказа
 events.on('cart:order', () => {
-    // Сбрасываем данные покупателя при начале оформления
     buyerModel.clear();
     modal.render({ content: orderForm.render() });
-    
-    // Без данных кнопка должна быть неактивной
+// исправила: Ошибки берутся из модели
+    const errors = buyerModel.validateOrder();
     orderForm.setValid(false);
-    orderForm.setAddressError('Необходимо указать адрес');
+    orderForm.setAddressError(errors.address || '');
 });
 
-// Обрабочтик отправки формы заказа
+// Обработчик отправки 
 events.on('order:submit', () => {
     const formData = orderForm.getFormData();
     buyerModel.setData(formData);
     
-    // Используем валидацию только для заказа
     const errors = buyerModel.validateOrder();
-    console.log('Ошибки формы заказа:', errors);
     
     if (Object.keys(errors).length === 0) {
         modal.render({ content: contactsForm.render() });
-        
-        // Инициализируем валидацию формы контактов
         validateContactsForm();
     } else {
-        // Показываем ошибки
         if (errors.address) {
             orderForm.setAddressError(errors.address);
         } else if (errors.payment) {
@@ -277,35 +270,33 @@ events.on('contacts:submit', () => {
     const formData = contactsForm.getFormData();
     buyerModel.setData(formData);
     
-    // Используем валидацию только для контактов
     const errors = buyerModel.validateContacts();
-    console.log('Ошибки формы контактов:', errors);
     
     if (Object.keys(errors).length === 0) {
-        // Создаем заказ
-        const order = {
-            ...buyerModel.getData(),
-            total: cartModel.getTotal(),
-            items: cartModel.getItems().map(item => item.id)
-        } as any;
+        const buyerData = buyerModel.getData();
         
-        console.log('Отправка заказа:', order);
-        
-        // Отправляем заказ на сервер
-        shopAPI.createOrder(order)
-            .then((response) => {
-                console.log('Заказ создан:', response);
-                successView.render({ total: response.total });
-                modal.render({ content: successView.render() });
-                
-                // Очищаем корзинку и данные юзера
-                cartModel.clear();
-                buyerModel.clear();
-            })
-            .catch(error => {
-                console.error('Ошибка при создании заказа:', error);
-                contactsForm.errors = 'Ошибка при оформлении заказа';
-            });
+        if (buyerData.payment && buyerData.email && buyerData.phone && buyerData.address) {
+            const order: IOrder = {
+                payment: buyerData.payment,
+                email: buyerData.email,
+                phone: buyerData.phone,
+                address: buyerData.address,
+                total: cartModel.getTotal(),
+                items: cartModel.getItems().map(item => item.id)
+            };
+            
+            shopAPI.createOrder(order)
+                .then((response) => {
+                    successView.render({ total: response.total });
+                    modal.render({ content: successView.render() });
+                    
+                    cartModel.clear();
+                    buyerModel.clear();
+                })
+                .catch(error => {
+                    contactsForm.errors = 'Ошибка при оформлении заказа';
+                });
+        }
     } else {
         contactsForm.errors = Object.values(errors).join(', ');
     }
@@ -321,23 +312,13 @@ events.on('modal:close', () => {
     modal.close();
 });
 
-// Запуск приложения:
+// запуск приложения
 
 // Загружаем товары с сервера при запуске
 shopAPI.getProductList()
     .then(products => {
-        console.log('API_URL:', API_URL);
-        console.log('CDN_URL:', CDN_URL);
-        console.log('Загружено товаров:', products.length);
-        if (products.length > 0) {
-            console.log('Первый товар:', products[0]);
-            console.log('Полный URL изображения:', CDN_URL + products[0]?.image);
-        }
         productModel.setProducts(products);
     })
     .catch(error => {
         console.error('Ошибка при загрузке товаров:', error);
     });
-
-console.log('Приложение запущено!');
-

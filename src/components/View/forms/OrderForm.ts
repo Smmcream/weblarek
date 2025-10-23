@@ -4,7 +4,8 @@ import { ensureElement } from '../../../utils/utils';
 
 interface IOrderFormActions {
     onSubmit: (event: SubmitEvent) => void;
-    onPaymentChange: (payment: TPayment) => void;
+    onPaymentChange?: (payment: TPayment) => void;
+    onAddressChange?: (address: string) => void;
 }
 
 export class OrderForm extends Form<IBuyer> {
@@ -20,6 +21,11 @@ export class OrderForm extends Form<IBuyer> {
         this._addressInput = ensureElement<HTMLInputElement>('input[name="address"]', container);
         this._cardButton = ensureElement<HTMLButtonElement>('button[name="card"]', container);
         this._cashButton = ensureElement<HTMLButtonElement>('button[name="cash"]', container);
+
+        // Обработчики изменения полей внутри! класса
+        this._addressInput.addEventListener('input', () => {
+            actions?.onAddressChange?.(this._addressInput.value);
+        });
 
         // Обработчики для кнопок оплаты
         this._cardButton.addEventListener('click', () => {
@@ -50,7 +56,6 @@ export class OrderForm extends Form<IBuyer> {
         return this._addressInput.value;
     }
 
-    // для управления состоянием
     setValid(valid: boolean) {
         this._submit.disabled = !valid;
     }
@@ -60,12 +65,10 @@ export class OrderForm extends Form<IBuyer> {
     }
 
     private setPayment(method: TPayment) {
-        // Снимаем выделение со всех кнопок
         this._paymentButtons.forEach(button => {
             button.classList.remove('button_alt-active');
         });
 
-        // Выделяем выбранную кнопку
         if (method === 'card') {
             this._cardButton.classList.add('button_alt-active');
         } else if (method === 'cash') {

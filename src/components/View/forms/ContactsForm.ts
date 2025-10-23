@@ -4,6 +4,8 @@ import { ensureElement } from '../../../utils/utils';
 
 interface IContactsFormActions {
     onSubmit: (event: SubmitEvent) => void;
+    onEmailChange?: (email: string) => void;
+    onPhoneChange?: (phone: string) => void;
 }
 
 export class ContactsForm extends Form<IBuyer> {
@@ -15,6 +17,15 @@ export class ContactsForm extends Form<IBuyer> {
 
         this._emailInput = ensureElement<HTMLInputElement>('input[name="email"]', container);
         this._phoneInput = ensureElement<HTMLInputElement>('input[name="phone"]', container);
+
+        // Обработчик изменения полей внутри! класса
+        this._emailInput.addEventListener('input', () => {
+            actions?.onEmailChange?.(this._emailInput.value);
+        });
+
+        this._phoneInput.addEventListener('input', () => {
+            actions?.onPhoneChange?.(this._phoneInput.value);
+        });
 
         // Обработчик отправки формы
         if (actions?.onSubmit) {
